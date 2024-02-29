@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/PNYwise/chat-server";
+
+message Connect {
+  string id = 1;
+  string name = 2;
+}
+
+message Message {
+  string from = 1;
+  string to = 2;
+  string content = 3;
+}
+
+message Close {}
+
+service Broadcast {
+  rpc CreateStream(Connect) returns (stream Message);
+  rpc BroadcastMessage(Message) returns (Close);
+}
