@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
 	"sync"
@@ -25,25 +24,18 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	c.clients[clientID] = stream
 	c.clientsLock.Unlock()
 
-	go func() {
-		for {
-			select {
-			case msg := <-c.messageQueue:
-				if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
-					log.Printf("Error sending queued message to client %s: %v", msg.GetTo(), err)
-				}
-			}
+	for {
+		msg := <-c.messageQueue
+		if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
+			log.Printf("Error sending queued message to client %s: %v", msg.GetTo(), err)
 		}
-	}()
-
-	return nil
+	}
 }
 
 func (s *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Message) error {
 	s.clientsLock.Lock()
 	defer s.clientsLock.Unlock()
 	clientStream, ok := s.clients[clientID]
-	fmt.Printf("%v", msg)
 	if !ok {
 		return nil
 	}
@@ -56,8 +48,7 @@ func (s *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Messa
 }
 
 func (c *ChatServer) BroadcastMessage(ctx context.Context, message *chat_server.Message) (*chat_server.Close, error) {
-	fmt.Printf("%v", message)
-	c.messageQueue = make(chan *chat_server.Message)
+	c.messageQueue <- message
 	return &chat_server.Close{}, nil
 }
 
