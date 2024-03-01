@@ -8,7 +8,7 @@ type User struct {
 	CreatedAt sql.NullTime
 }
 
-type Massage struct {
+type Message struct {
 	Id        uint
 	Form      User
 	To        User
@@ -22,7 +22,7 @@ type IUserRepository interface {
 }
 
 type IMassageRepository interface {
-	Create(message *Massage) error
-	ReadByUserId(userId uint) (*[]Massage, error)
+	Create(message *Message) error
+	ReadByUserId(userId uint) (*[]Message, error)
 	Delete(ids []uint) error
 }
