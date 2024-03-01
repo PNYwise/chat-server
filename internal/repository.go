@@ -22,7 +22,7 @@ type IUserRepository interface {
 }
 
 type IMassageRepository interface {
-	Cerate(message *Massage) error
+	Create(message *Massage) error
 	ReadByUserId(userId uint) (*[]Massage, error)
 	Delete(ids []uint) error
 }
