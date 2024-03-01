@@ -21,7 +21,7 @@ type IUserRepository interface {
 	Exist(id int) bool
 }
 
-type IMassageRepository interface {
+type IMessageRepository interface {
 	Create(message *Message) error
 	ReadByUserId(userId uint) (*[]Message, error)
 	Delete(ids []uint) error
