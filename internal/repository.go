@@ -17,7 +17,7 @@ type Massage struct {
 }
 
 type IUserRepository interface {
-	Cerate(user *User) error
+	Create(user *User) error
 	Exist(id int) bool
 }
 
