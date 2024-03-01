@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"github.com/PNYwise/chat-server/internal"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
 )
@@ -76,24 +77,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// TODO CREATE TABLE users and message IF EXIST
-	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS users (
-			id BIGINT PRIMARY KEY AUTOINCREMENT,
-			name VARCHAR NOT NULL,
-			created_at TIMESTAMP
-		);
-		
-		CREATE TABLE IF NOT EXISTS messages (
-			id BIGINT PRIMARY KEY AUTOINCREMENT,
-			from_id BIGINT NOT NULL,
-			to_id BIGINT NOT NULL,
-			content TEXT,
-			created_at TIMESTAMP
-		);
-
-		`
-	_, err = db.Exec(createTableSQL)
+	// CREATE TABLE users and message IF EXIST
+	_, err = db.Exec(internal.CreateTableSQL)
 	if err != nil {
 		log.Fatalf("Error creating table: %v", err)
 	}
