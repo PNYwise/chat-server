@@ -3,6 +3,7 @@ module github.com/PNYwise/chat-server
 go 1.20
 
 require (
+	github.com/mattn/go-sqlite3 v1.14.22
 	google.golang.org/grpc v1.62.0
 	google.golang.org/protobuf v1.32.0
 )

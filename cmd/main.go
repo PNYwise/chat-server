@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"net"
 	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
@@ -24,6 +27,11 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	c.clients[clientID] = stream
 	c.clientsLock.Unlock()
 
+	// TODO: check client if exist, if no insert new client
+
+	// TODO: check existing message when client offline
+
+	// TODO: send existing message
 	for {
 		msg := <-c.messageQueue
 		if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
@@ -48,24 +56,41 @@ func (s *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Messa
 }
 
 func (c *ChatServer) BroadcastMessage(ctx context.Context, message *chat_server.Message) (*chat_server.Close, error) {
-	c.messageQueue <- message
+	// TODO: check receiver if exist
+
+	go func() {
+		c.messageQueue <- message
+	}()
 	return &chat_server.Close{}, nil
 }
 
 func main() {
+	// Initialization GB
+	db, err := sql.Open("sqlite3", "chat.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatal(err)
+	}
+
+	// TODO CREATE TABLE users and message IF EXIST
+
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()
 
-	// Menginisialisasi struktur ChatServer
+	// Initialization ChatServer
 	chatServer := &ChatServer{
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
 	}
 
-	// Mendaftarkan layanan obrolan ke server gRPC
+	// Resgister server gRPC
 	chat_server.RegisterBroadcastServer(server, chatServer)
 
-	// Mulai mendengarkan di port yang ditentukan
+	// Run
 	listener, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
