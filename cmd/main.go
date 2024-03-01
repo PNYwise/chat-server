@@ -87,7 +87,7 @@ func main() {
 		messageQueue: make(chan *chat_server.Message),
 	}
 
-	// Resgister server gRPC
+	// Register server gRPC
 	chat_server.RegisterBroadcastServer(server, chatServer)
 
 	// Run
