@@ -77,6 +77,26 @@ func main() {
 	}
 
 	// TODO CREATE TABLE users and message IF EXIST
+	createTableSQL := `
+		CREATE TABLE IF NOT EXISTS users (
+			id BIGINT PRIMARY KEY AUTOINCREMENT,
+			name VARCHAR NOT NULL,
+			created_at TIMESTAMP
+		);
+		
+		CREATE TABLE IF NOT EXISTS messages (
+			id BIGINT PRIMARY KEY AUTOINCREMENT,
+			from_id BIGINT NOT NULL,
+			to_id BIGINT NOT NULL,
+			content TEXT,
+			created_at TIMESTAMP
+		);
+
+		`
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		log.Fatalf("Error creating table: %v", err)
+	}
 
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()
