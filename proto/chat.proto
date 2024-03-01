@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package chat;
 
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/PNYwise/chat-server";
 
 message Connect {
@@ -13,6 +15,7 @@ message Message {
   string from = 1;
   string to = 2;
   string content = 3;
+  google.protobuf.Timestamp timestamp = 4;
 }
 
 message Close {}
