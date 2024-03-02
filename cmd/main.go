@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -18,17 +19,24 @@ type ChatServer struct {
 	clients      map[string]chat_server.Broadcast_CreateStreamServer
 	clientsLock  sync.Mutex
 	messageQueue chan *chat_server.Message
+	userRepo     internal.IUserRepository
 	chat_server.UnimplementedBroadcastServer
 }
 
 func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_server.Broadcast_CreateStreamServer) error {
-	clientID := connect.GetId()
+	stringClientID := connect.GetId()
 
+	clientID, err := strconv.Atoi(stringClientID)
+	if err != nil {
+		return err
+	}
+	//check client if exist, if no insert new client
+	if ok := c.userRepo.Exist(clientID); !ok {
+		return err
+	}
 	c.clientsLock.Lock()
-	c.clients[clientID] = stream
+	c.clients[stringClientID] = stream
 	c.clientsLock.Unlock()
-
-	// TODO: check client if exist, if no insert new client
 
 	// TODO: check existing message when client offline
 
@@ -77,11 +85,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// CREATE TABLE users and message IF EXIST
-	_, err = db.Exec(internal.CreateTableSQL)
+	// CREATE TABLE users and message IF EXIST.
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, internal.CreateTableSQL)
 	if err != nil {
-		log.Fatalf("Error creating table: %v", err)
+		// Handle the error here, potentially including specific error checking
+		log.Fatalf("Error creating tables: %v", err)
+	} else {
+		log.Println("Tables created successfully!")
 	}
+	// init repository
+	userRepo := internal.NewUserRepository(db)
 
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()
@@ -90,6 +104,7 @@ func main() {
 	chatServer := &ChatServer{
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
+		userRepo:     userRepo,
 	}
 
 	// Register server gRPC
