@@ -20,6 +20,7 @@ type ChatServer struct {
 	clientsLock  sync.Mutex
 	messageQueue chan *chat_server.Message
 	userRepo     internal.IUserRepository
+	messageRepo  internal.IMessageRepository
 	chat_server.UnimplementedBroadcastServer
 }
 
@@ -30,6 +31,7 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	if err != nil {
 		return err
 	}
+	c.clientsLock.Lock()
 	//check client if exist, if no insert new client
 	if ok := c.userRepo.Exist(clientID); !ok {
 		user := &internal.User{
@@ -40,7 +42,6 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 		}
 		stringClientID = strconv.Itoa(int(user.Id))
 	}
-	c.clientsLock.Lock()
 	c.clients[stringClientID] = stream
 	c.clientsLock.Unlock()
 
@@ -50,7 +51,27 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	for {
 		msg := <-c.messageQueue
 		if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
-			log.Printf("Error sending queued message to client %s: %v", msg.GetTo(), err)
+			//save unsed messsage
+			go func(cpMsg *chat_server.Message) {
+				From, err := strconv.Atoi(cpMsg.GetFrom())
+				if err != nil {
+					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
+				}
+				To, err := strconv.Atoi(cpMsg.GetTo())
+				if err != nil {
+					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
+				}
+				userFrom := &internal.User{
+					Id: uint(From),
+				}
+				userTo := &internal.User{
+					Id: uint(To),
+				}
+				message := &internal.Message{Form: userFrom, To: userTo, Content: cpMsg.GetContent()}
+				if err := c.messageRepo.Create(message); err != nil {
+					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
+				}
+			}(msg)
 		}
 	}
 }
@@ -102,6 +123,7 @@ func main() {
 	}
 	// init repository
 	userRepo := internal.NewUserRepository(db)
+	messageRepo := internal.NewMessageRepository(db)
 
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()
@@ -111,6 +133,7 @@ func main() {
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
 		userRepo:     userRepo,
+		messageRepo:  messageRepo,
 	}
 
 	// Register server gRPC

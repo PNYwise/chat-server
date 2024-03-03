@@ -5,13 +5,13 @@ import "database/sql"
 type User struct {
 	Id        uint
 	Name      string
-	CreatedAt sql.NullTime
+	CreatedAt *sql.NullTime
 }
 
 type Message struct {
 	Id        uint
-	Form      User
-	To        User
+	Form      *User
+	To        *User
 	Content   string
 	CreatedAt sql.NullTime
 }
