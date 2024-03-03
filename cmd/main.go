@@ -32,7 +32,13 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	}
 	//check client if exist, if no insert new client
 	if ok := c.userRepo.Exist(clientID); !ok {
-		return err
+		user := &internal.User{
+			Name: connect.Name,
+		}
+		if err := c.userRepo.Create(user); err != nil {
+			return err
+		}
+		stringClientID = strconv.Itoa(int(user.Id))
 	}
 	c.clientsLock.Lock()
 	c.clients[stringClientID] = stream

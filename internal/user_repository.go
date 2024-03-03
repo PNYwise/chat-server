@@ -17,7 +17,7 @@ func NewUserRepository(db *sql.DB) IUserRepository {
 // Create implements IUserRepository.
 func (u *userRepository) Create(user *User) error {
 	now := time.Now()
-	query := `INSERT INTO users (name, created_at) VALUES (?,?) RETURNS id`
+	query := `INSERT INTO users (name, created_at) VALUES (?,?)`
 	result, err := u.db.Exec(query, user.Name, now)
 	if err != nil {
 		log.Fatalf("Error executing query: %v", err)
