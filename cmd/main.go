@@ -42,30 +42,56 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 		}
 		stringClientID = strconv.Itoa(int(user.Id))
 	}
+
+	// add client connection in memory
 	c.clients[stringClientID] = stream
+
+	// check existing message when client offline
+	messages, err := c.messageRepo.ReadByUserId(uint(clientID))
+	if err != nil {
+		return err
+	}
+	// send existing message
+	if len(*messages) > 0 {
+		var messageId []uint
+		for _, v := range *messages {
+			messageId = append(messageId, v.Id)
+
+			msg := &chat_server.Message{
+				From:    strconv.Itoa(int(v.Form.Id)),
+				To:      strconv.Itoa(int(v.To.Id)),
+				Content: v.Content,
+			}
+			if err := stream.Send(msg); err != nil {
+				if err := c.messageRepo.Create(&v); err != nil {
+					log.Printf("Error sending queued message to client %d: %v", v.To.Id, err)
+				}
+			}
+		}
+		if err := c.messageRepo.Delete(messageId); err != nil {
+			return err
+		}
+	}
 	c.clientsLock.Unlock()
 
-	// TODO: check existing message when client offline
-
-	// TODO: send existing message
 	for {
 		msg := <-c.messageQueue
 		if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
 			//save unsed messsage
 			go func(cpMsg *chat_server.Message) {
-				From, err := strconv.Atoi(cpMsg.GetFrom())
+				from, err := strconv.Atoi(cpMsg.GetFrom())
 				if err != nil {
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
 				}
-				To, err := strconv.Atoi(cpMsg.GetTo())
+				to, err := strconv.Atoi(cpMsg.GetTo())
 				if err != nil {
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
 				}
 				userFrom := &internal.User{
-					Id: uint(From),
+					Id: uint(from),
 				}
 				userTo := &internal.User{
-					Id: uint(To),
+					Id: uint(to),
 				}
 				message := &internal.Message{Form: userFrom, To: userTo, Content: cpMsg.GetContent()}
 				if err := c.messageRepo.Create(message); err != nil {

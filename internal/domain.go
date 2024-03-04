@@ -13,7 +13,7 @@ type Message struct {
 	Form      *User
 	To        *User
 	Content   string
-	CreatedAt sql.NullTime
+	CreatedAt *sql.NullTime
 }
 
 type IUserRepository interface {
