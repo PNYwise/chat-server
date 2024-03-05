@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log"
 	"net"
 	"strconv"
@@ -118,8 +119,14 @@ func (s *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Messa
 }
 
 func (c *ChatServer) BroadcastMessage(ctx context.Context, message *chat_server.Message) (*chat_server.Close, error) {
-	// TODO: check receiver if exist
-
+	toId, err := strconv.Atoi(message.GetTo())
+	if err != nil {
+		return nil, err
+	}
+	exist := c.userRepo.Exist(toId)
+	if !exist {
+		return nil, errors.New("user not found")
+	}
 	go func() {
 		c.messageQueue <- message
 	}()
