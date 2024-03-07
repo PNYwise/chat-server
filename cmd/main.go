@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"sync"
 
+	"github.com/IBM/sarama"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/PNYwise/chat-server/internal"
@@ -20,6 +23,8 @@ type ChatServer struct {
 	clients      map[string]chat_server.Broadcast_CreateStreamServer
 	clientsLock  sync.Mutex
 	messageQueue chan *chat_server.Message
+	producer     sarama.SyncProducer
+	consumer     sarama.PartitionConsumer
 	userRepo     internal.IUserRepository
 	messageRepo  internal.IMessageRepository
 	chat_server.UnimplementedBroadcastServer
@@ -128,12 +133,68 @@ func (c *ChatServer) BroadcastMessage(ctx context.Context, message *chat_server.
 		return nil, errors.New("user not found")
 	}
 	go func() {
-		c.messageQueue <- message
+		if err := c.publishMessage("chat", message); err != nil {
+			fmt.Printf("err send message :%v", err)
+		}
 	}()
 	return &chat_server.Close{}, nil
 }
 
+func (c *ChatServer) publishMessage(topic string, message *chat_server.Message) error {
+	jsonMessage, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
+		Topic: topic,
+		Value: sarama.ByteEncoder(jsonMessage),
+	})
+	return err
+}
+
 func main() {
+	var brokerList []string = []string{"127.0.0.1:9092"}
+	// kafka producer
+	config := sarama.NewConfig()
+	config.Producer.Return.Successes = true
+
+	producer, err := sarama.NewSyncProducer(brokerList, config)
+	if err != nil {
+		log.Fatalf("Error creating Kafka producer: %v", err)
+	}
+	defer func() {
+		if err := producer.Close(); err != nil {
+			log.Fatalf("Error closing Kafka producer: %v", err)
+		}
+	}()
+
+	// kafka consumer
+	consumer, err := sarama.NewConsumer(brokerList, config)
+	if err != nil {
+		log.Fatalf("Error creating Kafka consumer: %v", err)
+	}
+	defer func() {
+		if err := consumer.Close(); err != nil {
+			log.Fatalf("Error closing Kafka consumer: %v", err)
+		}
+	}()
+
+	// Kafka topic to consume messages from
+	topic := "demo-2"
+	partition := int32(0)
+	offset := int64(sarama.OffsetNewest)
+
+	// Create a partition consumer for the given topic, partition, and offset
+	partitionConsumer, err := consumer.ConsumePartition(topic, partition, offset)
+	if err != nil {
+		log.Fatalf("Error creating partition consumer: %v", err)
+	}
+	defer func() {
+		if err := partitionConsumer.Close(); err != nil {
+			log.Fatalf("Error closing partition consumer: %v", err)
+		}
+	}()
+
 	// Initialization GB
 	db, err := sql.Open("sqlite3", "chat.db")
 	if err != nil {
