@@ -1,37 +1,35 @@
 package internal
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type messageRepository struct {
-	db *sql.DB
+	db  *pgx.Conn
+	ctx context.Context
 }
 
-func NewMessageRepository(db *sql.DB) IMessageRepository {
-	return &messageRepository{db}
+func NewMessageRepository(db *pgx.Conn, ctx context.Context) IMessageRepository {
+	return &messageRepository{db, ctx}
 }
 
 // Create implements IMessageRepository.
 func (m *messageRepository) Create(message *Message) error {
 	now := time.Now()
-	query := `INSERT INTO messages (from_id, to_id, content, created_at) VALUES (?,?,?,?)`
+	query := `INSERT INTO messages (from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4) RETURNING id`
 
-	result, err := m.db.Exec(query, message.Form.Id, message.To.Id, message.Content, now)
+	err := m.db.QueryRow(m.ctx, query, message.Form.Id, message.To.Id, message.Content, now).Scan(&message.Id)
 	if err != nil {
 		log.Printf("Error executing query: %v", err)
 		return err
 	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		log.Printf("Error get id: %v", err)
-		return err
-	}
-	message.Id = uint(id)
 	var createdAt sql.NullTime
 	createdAt.Time = now
 	createdAt.Valid = true
@@ -48,19 +46,11 @@ func (m *messageRepository) Delete(ids []uint) error {
 	}
 	idStr := strings.Join(messageids, ",")
 	query := "DELETE FROM messages WHERE id IN(" + idStr + ")"
-	stmt, err := m.db.Prepare(query)
-	if err != nil {
-		log.Printf("Error preparing query: %v", err)
+
+	if _, err := m.db.Exec(m.ctx, query); err != nil {
+		log.Fatalf("error executing query: %v", err)
 		return err
 	}
-	defer stmt.Close()
-
-	_, err = stmt.Exec()
-	if err != nil {
-		log.Printf("Error executing query: %v", err)
-		return err
-	}
-
 	return nil
 }
 
@@ -70,7 +60,7 @@ func (m *messageRepository) ReadByUserId(userId uint) (*[]Message, error) {
 		SELECT m.id, m.from_id, m.to_id, m.content, m.created_at 
 		FROM messages as m 
 		WHERE m.to_id = $1`
-	rows, err := m.db.Query(query, userId)
+	rows, err := m.db.Query(m.ctx, query, userId)
 	if err != nil {
 		log.Printf("Error executing query: %v", err)
 		return nil, err

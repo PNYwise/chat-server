@@ -1,16 +1,19 @@
 package internal
 
 const CreateTableSQL = `
+	CREATE SEQUENCE IF NOT EXISTS users_id_seq;
+	CREATE SEQUENCE IF NOT EXISTS messages_id_seq;
+
 	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id BIGINT PRIMARY KEY DEFAULT nextval('users_id_seq'),
 		name VARCHAR(200) NOT NULL,
 		created_at TIMESTAMP
 	);
 
 	CREATE TABLE IF NOT EXISTS messages (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		from_id INTEGER NOT NULL,
-		to_id INTEGER NOT NULL,
+		id BIGINT PRIMARY KEY DEFAULT nextval('messages_id_seq'),
+		from_id BIGINT NOT NULL,
+		to_id BIGINT NOT NULL,
 		content VARCHAR(4096) NOT NULL,
 		created_at TIMESTAMP,
 		CONSTRAINT fk_messages_from_id FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,

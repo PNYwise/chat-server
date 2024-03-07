@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/IBM/sarama"
+	"github.com/jackc/pgx/v5"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/PNYwise/chat-server/internal"
@@ -200,20 +200,32 @@ func main() {
 		}
 	}()
 
+	ctx := context.Background()
 	// Initialization GB
-	db, err := sql.Open("sqlite3", "chat.db")
+	dbConfig := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s",
+		"user",
+		"password",
+		"localhost",
+		54321,
+		"post-chat",
+	)
+	connConfig, err := pgx.ParseConfig(dbConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 
-	if err := db.Ping(); err != nil {
+	db, err := pgx.ConnectConfig(ctx, connConfig)
+	if err != nil {
 		log.Fatal(err)
 	}
 
+	if err := db.Ping(ctx); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Connected to Database")
+
 	// CREATE TABLE users and message IF EXIST.
-	ctx := context.Background()
-	_, err = db.ExecContext(ctx, internal.CreateTableSQL)
+	_, err = db.Exec(ctx, internal.CreateTableSQL)
 	if err != nil {
 		// Handle the error here, potentially including specific error checking
 		log.Fatalf("Error creating tables: %v", err)
@@ -221,8 +233,8 @@ func main() {
 		log.Println("Tables created successfully!")
 	}
 	// init repository
-	userRepo := internal.NewUserRepository(db)
-	messageRepo := internal.NewMessageRepository(db)
+	userRepo := internal.NewUserRepository(db, ctx)
+	messageRepo := internal.NewMessageRepository(db,ctx)
 
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()
