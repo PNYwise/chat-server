@@ -19,6 +19,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const topic = "chat"
+
 type ChatServer struct {
 	clients      map[string]chat_server.Broadcast_CreateStreamServer
 	clientsLock  sync.Mutex
@@ -81,7 +83,13 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	c.clientsLock.Unlock()
 
 	for {
-		msg := <-c.messageQueue
+		byteMessage := <-c.consumer.Messages()
+
+		msg := new(chat_server.Message)
+		if err := json.Unmarshal(byteMessage.Value, msg); err != nil {
+			log.Printf("Error sending queued message to client %s: %v", msg.GetTo(), err)
+		}
+
 		if err := c.sendMessageToClient(msg.GetTo(), msg); err != nil {
 			//save unsed messsage
 			go func(cpMsg *chat_server.Message) {
@@ -93,12 +101,10 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 				if err != nil {
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
 				}
-				userFrom := &internal.User{
-					Id: uint(from),
-				}
-				userTo := &internal.User{
-					Id: uint(to),
-				}
+
+				userFrom := &internal.User{Id: uint(from)}
+				userTo := &internal.User{Id: uint(to)}
+
 				message := &internal.Message{Form: userFrom, To: userTo, Content: cpMsg.GetContent()}
 				if err := c.messageRepo.Create(message); err != nil {
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
@@ -108,10 +114,10 @@ func (c *ChatServer) CreateStream(connect *chat_server.Connect, stream chat_serv
 	}
 }
 
-func (s *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Message) error {
-	s.clientsLock.Lock()
-	defer s.clientsLock.Unlock()
-	clientStream, ok := s.clients[clientID]
+func (c *ChatServer) sendMessageToClient(clientID string, msg *chat_server.Message) error {
+	c.clientsLock.Lock()
+	defer c.clientsLock.Unlock()
+	clientStream, ok := c.clients[clientID]
 	if !ok {
 		return nil
 	}
@@ -133,7 +139,7 @@ func (c *ChatServer) BroadcastMessage(ctx context.Context, message *chat_server.
 		return nil, errors.New("user not found")
 	}
 	go func() {
-		if err := c.publishMessage("chat", message); err != nil {
+		if err := c.publishMessage(topic, message); err != nil {
 			fmt.Printf("err send message :%v", err)
 		}
 	}()
@@ -180,7 +186,6 @@ func main() {
 	}()
 
 	// Kafka topic to consume messages from
-	topic := "demo-2"
 	partition := int32(0)
 	offset := int64(sarama.OffsetNewest)
 
@@ -226,6 +231,8 @@ func main() {
 	chatServer := &ChatServer{
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
+		producer:     producer,
+		consumer:     partitionConsumer,
 		userRepo:     userRepo,
 		messageRepo:  messageRepo,
 	}
