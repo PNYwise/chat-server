@@ -99,7 +99,7 @@ func main() {
 	}
 	defer listener.Close()
 
-	log.Printf("Server listening on port :%d \n", internalConfig.GetInt("app.port"))
+	log.Printf("Server listening on port :%s \n", appPort)
 	if err := server.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v \n", err)
 	}
