@@ -7,17 +7,23 @@ import (
 	"net"
 
 	"github.com/IBM/sarama"
-	"github.com/jackc/pgx/v5"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/PNYwise/chat-server/internal"
+	"github.com/PNYwise/chat-server/internal/configs"
 	"github.com/PNYwise/chat-server/internal/handler"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
 )
 
 func main() {
-	var brokerList []string = []string{"127.0.0.1:9092"}
+
+	// init configs
+	internalConfig := configs.New()
+
+	borker := fmt.Sprintf("%s:%d", internalConfig.GetString("kafka.host"), internalConfig.GetInt("kafka.port"))
+
+	var brokerList []string = []string{borker}
 	// kafka producer
 	config := sarama.NewConfig()
 	config.Producer.Return.Successes = true
@@ -59,28 +65,10 @@ func main() {
 	}()
 
 	ctx := context.Background()
-	// Initialization GB
-	dbConfig := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s",
-		"user",
-		"password",
-		"localhost",
-		54321,
-		"post-chat",
-	)
-	connConfig, err := pgx.ParseConfig(dbConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	db, err := pgx.ConnectConfig(ctx, connConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if err := db.Ping(ctx); err != nil {
-		log.Fatal(err)
-	}
-	log.Println("Connected to Database")
+	// Initialize the db
+	db := configs.DbConn(ctx, internalConfig)
+	defer db.Close(ctx)
 
 	// CREATE TABLE users and message IF EXIST.
 	_, err = db.Exec(ctx, internal.CreateTableSQL)
@@ -90,6 +78,7 @@ func main() {
 	} else {
 		log.Println("Tables created successfully!")
 	}
+
 	// init repository
 	userRepo := internal.NewUserRepository(db, ctx)
 	messageRepo := internal.NewMessageRepository(db, ctx)
@@ -101,15 +90,16 @@ func main() {
 	// Register server gRPC
 	chat_server.RegisterBroadcastServer(server, chatServer)
 
+	appPort := fmt.Sprintf(":%d", internalConfig.GetInt("app.port"))
 	// Run
-	listener, err := net.Listen("tcp", ":50051")
+	listener, err := net.Listen("tcp", appPort)
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 	defer listener.Close()
 
-	log.Println("Server listening on port :50051")
+	log.Printf("Server listening on port :%d \n", internalConfig.GetInt("app.port"))
 	if err := server.Serve(listener); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		log.Fatalf("Failed to serve: %v \n", err)
 	}
 }
