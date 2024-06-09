@@ -7,7 +7,10 @@ const CreateTableSQL = `
 	CREATE TABLE IF NOT EXISTS users (
 		id BIGINT PRIMARY KEY DEFAULT nextval('users_id_seq'),
 		name VARCHAR(200) NOT NULL,
-		created_at TIMESTAMP
+		username VARCHAR(200) NOT NULL,
+		password VARCHAR(200) NOT NULL,
+		created_at TIMESTAMP,
+		CONSTRAINT UQ_username UNIQUE (username)
 	);
 
 	CREATE TABLE IF NOT EXISTS messages (
@@ -21,8 +24,10 @@ const CreateTableSQL = `
 	);
 		
 	CREATE INDEX IF NOT EXISTS idx_users_created_at ON users (created_at) WHERE created_at IS NOT NULL; 
+	CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
 
 	CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages (created_at) WHERE created_at IS NOT NULL; 
 	CREATE INDEX IF NOT EXISTS idx_messages_from_id ON messages (from_id); 
 	CREATE INDEX IF NOT EXISTS idx_messages_to_id ON messages (to_id);
+	
 `
