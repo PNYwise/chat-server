@@ -12,6 +12,7 @@ import (
 	"github.com/PNYwise/chat-server/internal"
 	"github.com/PNYwise/chat-server/internal/configs"
 	"github.com/PNYwise/chat-server/internal/handler"
+	"github.com/PNYwise/chat-server/internal/repository"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
 )
@@ -80,8 +81,8 @@ func main() {
 	}
 
 	// init repository
-	userRepo := internal.NewUserRepository(db, ctx)
-	messageRepo := internal.NewMessageRepository(db, ctx)
+	userRepo := repository.NewUserRepository(db, ctx)
+	messageRepo := repository.NewMessageRepository(db, ctx)
 
 	// Inisialisasi server gRPC
 	server := grpc.NewServer()

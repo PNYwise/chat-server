@@ -1,4 +1,4 @@
-package internal
+package repository
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PNYwise/chat-server/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,12 +17,12 @@ type messageRepository struct {
 	ctx context.Context
 }
 
-func NewMessageRepository(db *pgx.Conn, ctx context.Context) IMessageRepository {
+func NewMessageRepository(db *pgx.Conn, ctx context.Context) domain.IMessageRepository {
 	return &messageRepository{db, ctx}
 }
 
 // Create implements IMessageRepository.
-func (m *messageRepository) Create(message *Message) error {
+func (m *messageRepository) Create(message *domain.Message) error {
 	now := time.Now()
 	query := `INSERT INTO messages (from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4) RETURNING id`
 
@@ -55,7 +56,7 @@ func (m *messageRepository) Delete(ids []uint) error {
 }
 
 // ReadByUserId implements IMessageRepository.
-func (m *messageRepository) ReadByUserId(userId uint) (*[]Message, error) {
+func (m *messageRepository) ReadByUserId(userId uint) (*[]domain.Message, error) {
 	query := `
 		SELECT m.id, m.from_id, m.to_id, m.content, m.created_at 
 		FROM messages as m 
@@ -67,12 +68,12 @@ func (m *messageRepository) ReadByUserId(userId uint) (*[]Message, error) {
 	}
 	defer rows.Close()
 
-	var messages []Message
+	var messages []domain.Message
 
 	for rows.Next() {
-		var message Message
-		var userFrom User
-		var userTo User
+		var message domain.Message
+		var userFrom domain.User
+		var userTo domain.User
 		var createdAt sql.NullTime
 		createdAt.Valid = true
 		err := rows.Scan(&message.Id, &userFrom.Id, &userTo.Id, &message.Content, &createdAt.Time)

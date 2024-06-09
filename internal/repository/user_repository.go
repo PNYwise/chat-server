@@ -1,4 +1,4 @@
-package internal
+package repository
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/PNYwise/chat-server/internal/domain"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -14,12 +15,12 @@ type userRepository struct {
 	ctx context.Context
 }
 
-func NewUserRepository(db *pgx.Conn, ctx context.Context) IUserRepository {
+func NewUserRepository(db *pgx.Conn, ctx context.Context) domain.IUserRepository {
 	return &userRepository{db, ctx}
 }
 
 // Create implements IUserRepository.
-func (u *userRepository) Create(user *User) error {
+func (u *userRepository) Create(user *domain.User) error {
 	now := time.Now()
 	query := `INSERT INTO users (name, created_at) VALUES ($1,$2) RETURNING id`
 	err := u.db.QueryRow(u.ctx, query, user.Name, now).Scan(&user.Id)

@@ -1,12 +1,6 @@
-package internal
+package domain
 
 import "database/sql"
-
-type User struct {
-	Id        uint
-	Name      string
-	CreatedAt *sql.NullTime
-}
 
 type Message struct {
 	Id        uint
@@ -14,11 +8,6 @@ type Message struct {
 	To        *User
 	Content   string
 	CreatedAt *sql.NullTime
-}
-
-type IUserRepository interface {
-	Create(user *User) error
-	Exist(id int) bool
 }
 
 type IMessageRepository interface {

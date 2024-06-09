@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/IBM/sarama"
-	"github.com/PNYwise/chat-server/internal"
+	"github.com/PNYwise/chat-server/internal/domain"
 	chat_server "github.com/PNYwise/chat-server/proto"
 )
 
@@ -22,12 +22,12 @@ type ChatHandler struct {
 	messageQueue chan *chat_server.Message
 	producer     sarama.SyncProducer
 	consumer     sarama.PartitionConsumer
-	userRepo     internal.IUserRepository
-	messageRepo  internal.IMessageRepository
+	userRepo     domain.IUserRepository
+	messageRepo  domain.IMessageRepository
 	chat_server.UnimplementedBroadcastServer
 }
 
-func NewChatHandler(producer sarama.SyncProducer, partitionConsumer sarama.PartitionConsumer, userRepo internal.IUserRepository, messageRepo internal.IMessageRepository) *ChatHandler {
+func NewChatHandler(producer sarama.SyncProducer, partitionConsumer sarama.PartitionConsumer, userRepo domain.IUserRepository, messageRepo domain.IMessageRepository) *ChatHandler {
 	return &ChatHandler{
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
@@ -48,7 +48,7 @@ func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_ser
 	c.clientsLock.Lock()
 	//check client if exist, if no insert new client
 	if ok := c.userRepo.Exist(clientID); !ok {
-		user := &internal.User{
+		user := &domain.User{
 			Name: connect.Name,
 		}
 		if err := c.userRepo.Create(user); err != nil {
@@ -108,10 +108,10 @@ func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_ser
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
 				}
 
-				userFrom := &internal.User{Id: uint(from)}
-				userTo := &internal.User{Id: uint(to)}
+				userFrom := &domain.User{Id: uint(from)}
+				userTo := &domain.User{Id: uint(to)}
 
-				message := &internal.Message{Form: userFrom, To: userTo, Content: cpMsg.GetContent()}
+				message := &domain.Message{Form: userFrom, To: userTo, Content: cpMsg.GetContent()}
 				if err := c.messageRepo.Create(message); err != nil {
 					log.Printf("Error sending queued message to client %s: %v", cpMsg.GetTo(), err)
 				}
