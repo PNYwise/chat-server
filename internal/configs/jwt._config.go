@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -29,4 +30,30 @@ func (j *JWTConfig) Generate(user *domain.User) (string, error) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(key))
+}
+
+func (j *JWTConfig) Verify(accessToken string) (*domain.UserClaims, error) {
+	token, err := jwt.Parse(
+		accessToken,
+		func(token *jwt.Token) (interface{}, error) {
+			_, ok := token.Method.(*jwt.SigningMethodHMAC)
+			if !ok {
+				return nil, fmt.Errorf("unexpected token signing method")
+			}
+
+			key := j.config.GetString("jwt.secret")
+			return []byte(key), nil
+		},
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid token: %w", err)
+	}
+
+	claims, ok := token.Claims.(*domain.UserClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	return claims, nil
 }

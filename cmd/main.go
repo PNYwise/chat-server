@@ -12,31 +12,11 @@ import (
 	"github.com/PNYwise/chat-server/internal"
 	"github.com/PNYwise/chat-server/internal/configs"
 	"github.com/PNYwise/chat-server/internal/handler"
+	"github.com/PNYwise/chat-server/internal/interceptor"
 	"github.com/PNYwise/chat-server/internal/repository"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
 )
-
-func unaryInterceptor(
-	ctx context.Context,
-	req interface{},
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (interface{}, error) {
-	ctx.Value("")
-	log.Println("--> unary interceptor: ", info.FullMethod)
-	return handler(ctx, req)
-}
-
-func streamInterceptor(
-	srv interface{},
-	stream grpc.ServerStream,
-	info *grpc.StreamServerInfo,
-	handler grpc.StreamHandler,
-) error {
-	log.Println("--> stream interceptor: ", info.FullMethod)
-	return handler(srv, stream)
-}
 
 func main() {
 
@@ -101,10 +81,16 @@ func main() {
 		log.Println("Tables created successfully!")
 	}
 
+	// init jwt
+	jwtConfig := configs.NewJWTConfig(internalConfig)
+
+	// init interceptor
+	authInterceptor := interceptor.NewAuthInterceptor(jwtConfig)
+
 	// Inisialisasi server gRPC
 	server := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(unaryInterceptor),
-		grpc.ChainStreamInterceptor(streamInterceptor),
+		grpc.ChainUnaryInterceptor(authInterceptor.Unary()),
+		grpc.ChainStreamInterceptor(authInterceptor.Stream()),
 	)
 
 	// init repository
