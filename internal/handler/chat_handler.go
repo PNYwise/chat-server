@@ -12,14 +12,14 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/PNYwise/chat-server/internal/domain"
 	chat_server "github.com/PNYwise/chat-server/proto"
+	"github.com/spf13/viper"
 )
-
-const TOPIC = "chat"
 
 type ChatHandler struct {
 	clients      map[string]chat_server.Broadcast_CreateStreamServer
 	clientsLock  sync.Mutex
 	messageQueue chan *chat_server.Message
+	config       *viper.Viper
 	producer     sarama.SyncProducer
 	consumer     sarama.PartitionConsumer
 	userRepo     domain.IUserRepository
@@ -27,12 +27,13 @@ type ChatHandler struct {
 	chat_server.UnimplementedBroadcastServer
 }
 
-func NewChatHandler(producer sarama.SyncProducer, partitionConsumer sarama.PartitionConsumer, userRepo domain.IUserRepository, messageRepo domain.IMessageRepository) *ChatHandler {
+func NewChatHandler(config *viper.Viper, producer sarama.SyncProducer, consumer sarama.PartitionConsumer, userRepo domain.IUserRepository, messageRepo domain.IMessageRepository) *ChatHandler {
 	return &ChatHandler{
 		clients:      make(map[string]chat_server.Broadcast_CreateStreamServer),
 		messageQueue: make(chan *chat_server.Message),
+		config:       config,
 		producer:     producer,
-		consumer:     partitionConsumer,
+		consumer:     consumer,
 		userRepo:     userRepo,
 		messageRepo:  messageRepo,
 	}
@@ -145,7 +146,7 @@ func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server
 		return nil, errors.New("user not found")
 	}
 	go func() {
-		if err := c.publishMessage(TOPIC, message); err != nil {
+		if err := c.publishMessage(c.config.GetString("kafka.topic"), message); err != nil {
 			fmt.Printf("err send message :%v", err)
 		}
 	}()

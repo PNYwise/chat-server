@@ -1,8 +1,15 @@
 app:
-  topic: 
+  port: 
+jwt:
+  secret: 
+  duration: 
 database:
   port: 
   host: 
   username: 
   password: 
   name: 
+kafka:
+  topic: 
+  port: 
+  host: 

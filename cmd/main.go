@@ -17,6 +17,27 @@ import (
 	"google.golang.org/grpc"
 )
 
+func unaryInterceptor(
+	ctx context.Context,
+	req interface{},
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (interface{}, error) {
+	ctx.Value("")
+	log.Println("--> unary interceptor: ", info.FullMethod)
+	return handler(ctx, req)
+}
+
+func streamInterceptor(
+	srv interface{},
+	stream grpc.ServerStream,
+	info *grpc.StreamServerInfo,
+	handler grpc.StreamHandler,
+) error {
+	log.Println("--> stream interceptor: ", info.FullMethod)
+	return handler(srv, stream)
+}
+
 func main() {
 
 	// init configs
@@ -55,7 +76,7 @@ func main() {
 	offset := int64(sarama.OffsetNewest)
 
 	// Create a partition consumer for the given topic, partition, and offset
-	partitionConsumer, err := consumer.ConsumePartition(handler.TOPIC, partition, offset)
+	partitionConsumer, err := consumer.ConsumePartition(internalConfig.GetString("kafka.topic"), partition, offset)
 	if err != nil {
 		log.Fatalf("Error creating partition consumer: %v", err)
 	}
@@ -80,16 +101,22 @@ func main() {
 		log.Println("Tables created successfully!")
 	}
 
+	// Inisialisasi server gRPC
+	server := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(unaryInterceptor),
+		grpc.ChainStreamInterceptor(streamInterceptor),
+	)
+
 	// init repository
 	userRepo := repository.NewUserRepository(db, ctx)
 	messageRepo := repository.NewMessageRepository(db, ctx)
 
-	// Inisialisasi server gRPC
-	server := grpc.NewServer()
-
-	chatServer := handler.NewChatHandler(producer, partitionConsumer, userRepo, messageRepo)
+	// init handler
+	authHandler := handler.NewAuthHandler(userRepo)
+	chatHandler := handler.NewChatHandler(internalConfig, producer, partitionConsumer, userRepo, messageRepo)
 	// Register server gRPC
-	chat_server.RegisterBroadcastServer(server, chatServer)
+	chat_server.RegisterAuthServer(server, authHandler)
+	chat_server.RegisterBroadcastServer(server, chatHandler)
 
 	appPort := fmt.Sprintf(":%d", internalConfig.GetInt("app.port"))
 	// Run
