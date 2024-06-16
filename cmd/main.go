@@ -98,7 +98,7 @@ func main() {
 	messageRepo := repository.NewMessageRepository(db, ctx)
 
 	// init handler
-	authHandler := handler.NewAuthHandler(userRepo)
+	authHandler := handler.NewAuthHandler(userRepo, jwtConfig)
 	chatHandler := handler.NewChatHandler(internalConfig, producer, partitionConsumer, userRepo, messageRepo)
 	// Register server gRPC
 	chat_server.RegisterAuthServer(server, authHandler)

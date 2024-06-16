@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -13,6 +12,8 @@ import (
 	"github.com/PNYwise/chat-server/internal/domain"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ChatHandler struct {
@@ -44,18 +45,12 @@ func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_ser
 
 	clientID, err := strconv.Atoi(stringClientID)
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, err.Error())
 	}
 	c.clientsLock.Lock()
 	//check client if exist, if no insert new client
 	if ok := c.userRepo.Exist(clientID); !ok {
-		user := &domain.User{
-			Name: connect.Name,
-		}
-		if err := c.userRepo.Create(user); err != nil {
-			return err
-		}
-		stringClientID = strconv.Itoa(int(user.Id))
+		return status.Errorf(codes.NotFound, "user not found")
 	}
 
 	// add client connection in memory
@@ -64,7 +59,7 @@ func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_ser
 	// check existing message when client offline
 	messages, err := c.messageRepo.ReadByUserId(uint(clientID))
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, err.Error())
 	}
 	// send existing message
 	if len(*messages) > 0 {
@@ -84,7 +79,7 @@ func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_ser
 			}
 		}
 		if err := c.messageRepo.Delete(messageId); err != nil {
-			return err
+			return status.Errorf(codes.Internal, err.Error())
 		}
 	}
 	c.clientsLock.Unlock()
@@ -130,7 +125,7 @@ func (c *ChatHandler) sendMessageToClient(clientID string, msg *chat_server.Mess
 	}
 
 	if err := clientStream.Send(msg); err != nil {
-		return err
+		return status.Errorf(codes.Internal, err.Error())
 	}
 
 	return nil
@@ -143,7 +138,7 @@ func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server
 	}
 	exist := c.userRepo.Exist(toId)
 	if !exist {
-		return nil, errors.New("user not found")
+		return nil, status.Errorf(codes.NotFound, "user not found")
 	}
 	go func() {
 		if err := c.publishMessage(c.config.GetString("kafka.topic"), message); err != nil {
@@ -156,7 +151,7 @@ func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server
 func (c *ChatHandler) publishMessage(topic string, message *chat_server.Message) error {
 	jsonMessage, err := json.Marshal(message)
 	if err != nil {
-		return err
+		return status.Errorf(codes.Internal, err.Error())
 	}
 	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic: topic,

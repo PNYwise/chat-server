@@ -22,4 +22,5 @@ type User struct {
 type IUserRepository interface {
 	Create(user *User) error
 	Exist(id int) bool
+	ExistByUsername(username string) bool
 }
