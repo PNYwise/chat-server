@@ -24,8 +24,24 @@ func NewAuthHandler(userRepo domain.IUserRepository, jwtConfig *configs.JWTConfi
 	}
 }
 
-func (a *AuthHandler) Login(context.Context, *chat_server.LoginRequest) (*chat_server.Token, error) {
-	panic("")
+func (a *AuthHandler) Login(ctx context.Context, request *chat_server.LoginRequest) (*chat_server.Token, error) {
+	user, err := a.userRepo.FindByUsername(request.GetUsername())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, err.Error())
+	}
+	if user == nil {
+		return nil, status.Errorf(codes.Unauthenticated, "wrong username or password")
+	}
+	if ok := utils.NewBcrypt().VerifyPassword(user.Password, request.GetPassword()); !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "wrong username or password")
+	}
+
+	token, err := a.jwtConfig.Generate(user)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cannot generate access token")
+	}
+	res := &chat_server.Token{Token: token}
+	return res, nil
 }
 
 func (a *AuthHandler) Register(ctx context.Context, request *chat_server.RegisterRequest) (*chat_server.Token, error) {

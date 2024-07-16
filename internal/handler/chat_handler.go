@@ -13,6 +13,7 @@ import (
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -41,6 +42,12 @@ func NewChatHandler(config *viper.Viper, producer sarama.SyncProducer, consumer 
 }
 
 func (c *ChatHandler) CreateStream(connect *chat_server.Connect, stream chat_server.Broadcast_CreateStreamServer) error {
+	ctx := stream.Context()
+	md, _ := metadata.FromIncomingContext(ctx)
+	values := md["authorization"]
+
+	fmt.Printf(values[0])
+
 	stringClientID := connect.GetId()
 
 	clientID, err := strconv.Atoi(stringClientID)
