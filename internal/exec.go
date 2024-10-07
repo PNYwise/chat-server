@@ -8,7 +8,6 @@ const CreateTableSQL = `
 		id BIGINT PRIMARY KEY DEFAULT nextval('users_id_seq'),
 		name VARCHAR(200) NOT NULL,
 		username VARCHAR(200) NOT NULL,
-		password VARCHAR(200) NOT NULL,
 		created_at TIMESTAMP,
 		CONSTRAINT UQ_username UNIQUE (username)
 	);

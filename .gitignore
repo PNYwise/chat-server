@@ -1,4 +1,3 @@
-chat.db
 cmd/main
 envs/development.yaml
 .vscode

@@ -7,12 +7,10 @@ import (
 	"net"
 
 	"github.com/IBM/sarama"
-	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/PNYwise/chat-server/internal"
 	"github.com/PNYwise/chat-server/internal/configs"
 	"github.com/PNYwise/chat-server/internal/handler"
-	"github.com/PNYwise/chat-server/internal/interceptor"
 	"github.com/PNYwise/chat-server/internal/repository"
 	chat_server "github.com/PNYwise/chat-server/proto"
 	"google.golang.org/grpc"
@@ -69,8 +67,8 @@ func main() {
 	ctx := context.Background()
 
 	// Initialize the db
-	db := configs.DbConn(ctx, internalConfig)
-	defer db.Close(ctx)
+	db := configs.DbPool(ctx, internalConfig)
+	defer db.Close()
 
 	// CREATE TABLE users and message IF EXIST.
 	_, err = db.Exec(ctx, internal.CreateTableSQL)
@@ -81,27 +79,16 @@ func main() {
 		log.Println("Tables created successfully!")
 	}
 
-	// init jwt
-	jwtConfig := configs.NewJWTConfig(internalConfig)
-
-	// init interceptor
-	authInterceptor := interceptor.NewAuthInterceptor(jwtConfig)
-
 	// Inisialisasi server gRPC
-	server := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(authInterceptor.Unary()),
-		grpc.ChainStreamInterceptor(authInterceptor.Stream()),
-	)
+	server := grpc.NewServer()
 
 	// init repository
 	userRepo := repository.NewUserRepository(db, ctx)
 	messageRepo := repository.NewMessageRepository(db, ctx)
 
 	// init handler
-	authHandler := handler.NewAuthHandler(userRepo, jwtConfig)
 	chatHandler := handler.NewChatHandler(internalConfig, producer, partitionConsumer, userRepo, messageRepo)
 	// Register server gRPC
-	chat_server.RegisterAuthServer(server, authHandler)
 	chat_server.RegisterBroadcastServer(server, chatHandler)
 
 	appPort := fmt.Sprintf(":%d", internalConfig.GetInt("app.port"))

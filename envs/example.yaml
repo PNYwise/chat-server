@@ -1,8 +1,5 @@
 app:
-  port: 
-jwt:
-  secret: 
-  duration: 
+  port:  
 database:
   port: 
   host: 

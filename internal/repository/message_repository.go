@@ -9,15 +9,15 @@ import (
 	"time"
 
 	"github.com/PNYwise/chat-server/internal/domain"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type messageRepository struct {
-	db  *pgx.Conn
+	db  *pgxpool.Pool
 	ctx context.Context
 }
 
-func NewMessageRepository(db *pgx.Conn, ctx context.Context) domain.IMessageRepository {
+func NewMessageRepository(db *pgxpool.Pool, ctx context.Context) domain.IMessageRepository {
 	return &messageRepository{db, ctx}
 }
 

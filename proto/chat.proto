@@ -3,24 +3,24 @@ syntax = "proto3";
 package chat;
 
 import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
 
 option go_package = "github.com/PNYwise/chat-server";
 
-message Connect {
-  string id = 1;
-  string name = 2;
+
+message User {
+  string name = 1;
+  string username = 2;
 }
 
 message Message {
-  string from = 1;
-  string to = 2;
-  string content = 3;
-  google.protobuf.Timestamp createdAt = 4;
+  string to = 1;
+  string content = 2;
+  google.protobuf.Timestamp createdAt = 3;
 }
 
-message Close {}
-
 service Broadcast {
-  rpc CreateStream(Connect) returns (stream Message);
-  rpc BroadcastMessage(Message) returns (Close);
+  rpc CreateStream(google.protobuf.Empty) returns (stream Message);
+  rpc BroadcastMessage(Message) returns (google.protobuf.Empty);
+  rpc CreateUser(User) returns (google.protobuf.Empty);
 }

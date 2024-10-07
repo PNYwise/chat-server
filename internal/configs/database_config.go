@@ -4,48 +4,55 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/viper"
 )
 
-var db *pgx.Conn
+var dbPool *pgxpool.Pool
 
-func getDatabaseConn(ctx context.Context, config *viper.Viper) *pgx.Conn {
-
+// initDatabasePool initializes the connection pool to the PostgreSQL database.
+func initDatabasePool(ctx context.Context, config *viper.Viper) {
 	username := config.GetString("database.username")
 	password := config.GetString("database.password")
 	host := config.GetString("database.host")
 	port := config.GetInt("database.port")
 	name := config.GetString("database.name")
 
-	dbConfig := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s",
+	dbConfig := fmt.Sprintf("postgresql://%s:%s@%s:%d/%s?sslmode=disable",
 		username,
 		password,
 		host,
 		port,
 		name,
 	)
-	connConfig, err := pgx.ParseConfig(dbConfig)
+
+	poolConfig, err := pgxpool.ParseConfig(dbConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to parse database config: %v", err)
 	}
 
-	newDB, err := pgx.ConnectConfig(ctx, connConfig)
+	// Best practice configurations
+	poolConfig.MaxConns = 30                      // Maximum number of connections
+	poolConfig.MinConns = 5                       // Minimum number of connections
+	poolConfig.MaxConnLifetime = time.Hour        // Maximum connection lifetime
+	poolConfig.MaxConnIdleTime = 15 * time.Minute // Maximum idle time for connections
+	poolConfig.HealthCheckPeriod = time.Minute    // Health check interval
+
+	// Initialize the connection pool
+	dbPool, err = pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Unable to create connection pool: %v", err)
 	}
 
-	if err := newDB.Ping(ctx); err != nil {
-		log.Fatal(err)
-	}
 	log.Println("Connected to Database")
-	db = newDB
-	return db
 }
-func DbConn(ctx context.Context, config *viper.Viper) *pgx.Conn {
-	if db == nil {
-		db = getDatabaseConn(ctx, config)
+
+// DbPool returns the database connection pool, initializing it if necessary.
+func DbPool(ctx context.Context, config *viper.Viper) *pgxpool.Pool {
+	if dbPool == nil {
+		initDatabasePool(ctx, config)
 	}
-	return db
+	return dbPool
 }
