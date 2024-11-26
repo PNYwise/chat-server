@@ -26,7 +26,7 @@ func (m *messageRepository) Create(message *domain.Message) error {
 	now := time.Now()
 	query := `INSERT INTO messages (from_id, to_id, content, created_at) VALUES ($1,$2,$3,$4) RETURNING id`
 
-	err := m.db.QueryRow(m.ctx, query, message.Form.Id, message.To.Id, message.Content, now).Scan(&message.Id)
+	err := m.db.QueryRow(m.ctx, query, message.Form.Id, message.To.Id, message.Content, now).Scan(&message.ID)
 	if err != nil {
 		log.Printf("Error executing query: %v", err)
 		return err
@@ -56,10 +56,19 @@ func (m *messageRepository) Delete(ids []uint) error {
 }
 
 // ReadByUserId implements IMessageRepository.
-func (m *messageRepository) ReadByUserId(userId uint) (*[]domain.Message, error) {
+func (m *messageRepository) ReadByUserId(userID uint) (*[]domain.Message, error) {
 	query := `
-		SELECT m.id, m.from_id, m.to_id, m.content, m.created_at 
-		FROM messages as m 
+		SELECT 
+			m.id,
+			u_from.id,
+			u_from.username,
+			u_to.id,
+			u_to.username, 
+			m.content, 
+			m.created_at 
+		FROM messages as m
+		LEFT JOIN users u_from on u_from.id = m.from_id
+		LEFT JOIN users u_to on u_to.id = m.to_id
 		WHERE m.to_id = $1`
 	rows, err := m.db.Query(m.ctx, query, userId)
 	if err != nil {
@@ -76,7 +85,7 @@ func (m *messageRepository) ReadByUserId(userId uint) (*[]domain.Message, error)
 		var userTo domain.User
 		var createdAt sql.NullTime
 		createdAt.Valid = true
-		err := rows.Scan(&message.Id, &userFrom.Id, &userTo.Id, &message.Content, &createdAt.Time)
+		err := rows.Scan(&message.ID, &userFrom.Id, &userFrom.Username, &userTo.Id, &userTo.Username, &message.Content, &createdAt.Time)
 		if err != nil {
 			log.Printf("Error scanning row: %v", err)
 			return nil, err

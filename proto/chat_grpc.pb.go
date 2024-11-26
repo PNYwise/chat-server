@@ -30,7 +30,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type BroadcastClient interface {
 	CreateStream(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (Broadcast_CreateStreamClient, error)
-	BroadcastMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*empty.Empty, error)
+	BroadcastMessage(ctx context.Context, in *RequestMessage, opts ...grpc.CallOption) (*empty.Empty, error)
 	CreateUser(ctx context.Context, in *User, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
@@ -58,7 +58,7 @@ func (c *broadcastClient) CreateStream(ctx context.Context, in *empty.Empty, opt
 }
 
 type Broadcast_CreateStreamClient interface {
-	Recv() (*Message, error)
+	Recv() (*ResponseMessage, error)
 	grpc.ClientStream
 }
 
@@ -66,15 +66,15 @@ type broadcastCreateStreamClient struct {
 	grpc.ClientStream
 }
 
-func (x *broadcastCreateStreamClient) Recv() (*Message, error) {
-	m := new(Message)
+func (x *broadcastCreateStreamClient) Recv() (*ResponseMessage, error) {
+	m := new(ResponseMessage)
 	if err := x.ClientStream.RecvMsg(m); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-func (c *broadcastClient) BroadcastMessage(ctx context.Context, in *Message, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *broadcastClient) BroadcastMessage(ctx context.Context, in *RequestMessage, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
 	err := c.cc.Invoke(ctx, Broadcast_BroadcastMessage_FullMethodName, in, out, opts...)
 	if err != nil {
@@ -97,7 +97,7 @@ func (c *broadcastClient) CreateUser(ctx context.Context, in *User, opts ...grpc
 // for forward compatibility
 type BroadcastServer interface {
 	CreateStream(*empty.Empty, Broadcast_CreateStreamServer) error
-	BroadcastMessage(context.Context, *Message) (*empty.Empty, error)
+	BroadcastMessage(context.Context, *RequestMessage) (*empty.Empty, error)
 	CreateUser(context.Context, *User) (*empty.Empty, error)
 	mustEmbedUnimplementedBroadcastServer()
 }
@@ -109,7 +109,7 @@ type UnimplementedBroadcastServer struct {
 func (UnimplementedBroadcastServer) CreateStream(*empty.Empty, Broadcast_CreateStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method CreateStream not implemented")
 }
-func (UnimplementedBroadcastServer) BroadcastMessage(context.Context, *Message) (*empty.Empty, error) {
+func (UnimplementedBroadcastServer) BroadcastMessage(context.Context, *RequestMessage) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BroadcastMessage not implemented")
 }
 func (UnimplementedBroadcastServer) CreateUser(context.Context, *User) (*empty.Empty, error) {
@@ -137,7 +137,7 @@ func _Broadcast_CreateStream_Handler(srv interface{}, stream grpc.ServerStream) 
 }
 
 type Broadcast_CreateStreamServer interface {
-	Send(*Message) error
+	Send(*ResponseMessage) error
 	grpc.ServerStream
 }
 
@@ -145,12 +145,12 @@ type broadcastCreateStreamServer struct {
 	grpc.ServerStream
 }
 
-func (x *broadcastCreateStreamServer) Send(m *Message) error {
+func (x *broadcastCreateStreamServer) Send(m *ResponseMessage) error {
 	return x.ServerStream.SendMsg(m)
 }
 
 func _Broadcast_BroadcastMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Message)
+	in := new(RequestMessage)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func _Broadcast_BroadcastMessage_Handler(srv interface{}, ctx context.Context, d
 		FullMethod: Broadcast_BroadcastMessage_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BroadcastServer).BroadcastMessage(ctx, req.(*Message))
+		return srv.(BroadcastServer).BroadcastMessage(ctx, req.(*RequestMessage))
 	}
 	return interceptor(ctx, in, info, handler)
 }

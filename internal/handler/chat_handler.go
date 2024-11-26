@@ -19,6 +19,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ChatHandler manages the connections and communication between chat clients.
+// It provides methods for handling client streams and processes chat messages
+// using Kafka producers and consumers. It also interacts with user and message repositories.
 type ChatHandler struct {
 	clients     map[string]chat_server.Broadcast_CreateStreamServer
 	clientsLock sync.Mutex
@@ -30,6 +33,19 @@ type ChatHandler struct {
 	chat_server.UnimplementedBroadcastServer
 }
 
+// NewChatHandler initializes and returns a new instance of ChatHandler.
+// It sets up the required configuration, Kafka producer/consumer, and repositories
+// for managing users and messages in the chat application.
+//
+// Parameters:
+//   - config: Application configuration instance (Viper).
+//   - producer: Kafka synchronous producer for sending chat messages.
+//   - consumer: Kafka partition consumer for receiving messages.
+//   - userRepo: Repository for managing user-related operations.
+//   - messageRepo: Repository for managing message-related operations.
+//
+// Returns:
+//   - *ChatHandler: A fully initialized ChatHandler instance.
 func NewChatHandler(config *viper.Viper, producer sarama.SyncProducer, consumer sarama.PartitionConsumer, userRepo domain.IUserRepository, messageRepo domain.IMessageRepository) *ChatHandler {
 	return &ChatHandler{
 		clients:     make(map[string]chat_server.Broadcast_CreateStreamServer),
@@ -41,53 +57,85 @@ func NewChatHandler(config *viper.Viper, producer sarama.SyncProducer, consumer 
 	}
 }
 
+// CreateStream handles a bidirectional streaming connection with a chat client.
+// It registers the client stream to enable communication and manages incoming and outgoing messages.
+//
+// Parameters:
+//   - _ (*emptypb.Empty): A placeholder parameter for the gRPC method (not used).
+//   - stream (chat_server.Broadcast_CreateStreamServer): The gRPC stream used to communicate with the client.
+//
+// Returns:
+//   - error: An error if the streaming process fails; otherwise, nil.
 func (c *ChatHandler) CreateStream(_ *empty.Empty, stream chat_server.Broadcast_CreateStreamServer) error {
 	ctx := stream.Context()
+
+	// Extract metadata from the context to retrieve the username.
+	// The metadata is assumed to have a "username" field containing the client's username.
 	md, _ := metadata.FromIncomingContext(ctx)
 	values := md["username"]
-	username := values[0]
+	username := values[0] // Assuming at least one username exists in the metadata.
 
+	// Lock the clients map to ensure thread-safe access when modifying it.
 	c.clientsLock.Lock()
-	//check client if exist
+
+	// Check if the user exists in the repository.
+	// If the user does not exist, return a gRPC NotFound error.
 	user, err := c.userRepo.FindByUsername(username)
 	if err != nil {
 		return status.Errorf(codes.NotFound, "user not found")
 	}
 
-	// add client connection in memory
+	// Add the client's gRPC stream to the in-memory clients map.
+	// This allows the server to send messages directly to this client later.
 	c.clients[username] = stream
 
-	// check existing message when client offline
+	// Retrieve any messages that were sent to this user while they were offline.
+	// These messages are stored in the repository.
 	messages, err := c.messageRepo.ReadByUserId(user.Id)
 	if err != nil {
 		return status.Errorf(codes.Internal, err.Error())
 	}
-	// send existing message
-	if len(*messages) > 0 {
-		var messageId []uint
-		for _, v := range *messages {
-			messageId = append(messageId, v.Id)
 
-			msg := &chat_server.Message{
+	// If there are offline messages, send them to the client.
+	if len(*messages) > 0 {
+		var messageID []uint // To keep track of message IDs that are successfully sent.
+		for _, v := range *messages {
+			messageID = append(messageID, v.ID)
+
+			// Create a gRPC-compatible message object to send to the client.
+			msg := &chat_server.ResponseMessage{
+				From:      v.Form.Username,
 				To:        v.To.Username,
 				Content:   v.Content,
 				CreatedAt: timestamppb.New(v.CreatedAt.Time),
 			}
+
+			// Attempt to send the message to the client's stream.
 			if err := stream.Send(msg); err != nil {
+
+				// If sending fails, save the message back to the repository for future delivery.
 				if err := c.messageRepo.Create(&v); err != nil {
 					log.Printf("Error sending queued message to client %d: %v", v.To.Id, err)
 				}
 			}
 		}
-		if err := c.messageRepo.Delete(messageId); err != nil {
+
+		// Delete the successfully sent messages from the repository to avoid re-sending.
+		if err := c.messageRepo.Delete(messageID); err != nil {
 			return status.Errorf(codes.Internal, err.Error())
 		}
 	}
+
+	// Unlock the clients map since modifications are complete.
 	c.clientsLock.Unlock()
 
+	// Continuously listen for incoming messages from the Kafka consumer.
 	for {
+
+		// Receive a message from Kafka.
 		byteMessage := <-c.consumer.Messages()
 
+		// Deserialize the Kafka message into a structured object.
 		msg := new(domain.KafkaMessage)
 		if err := json.Unmarshal(byteMessage.Value, msg); err != nil {
 			log.Printf("Error sending queued message to client %s: %v", msg.ToUsername, err)
@@ -96,8 +144,8 @@ func (c *ChatHandler) CreateStream(_ *empty.Empty, stream chat_server.Broadcast_
 		if err := c.sendMessageToClient(msg.ToUsername, msg); err != nil {
 			//save unsed messsage
 			go func(cpMsg *domain.KafkaMessage) {
-				userFrom := &domain.User{Id: cpMsg.FromId}
-				userTo := &domain.User{Id: cpMsg.ToId}
+				userFrom := &domain.User{Id: cpMsg.FromID}
+				userTo := &domain.User{Id: cpMsg.ToID}
 
 				message := &domain.Message{Form: userFrom, To: userTo, Content: cpMsg.Content}
 				if err := c.messageRepo.Create(message); err != nil {
@@ -115,7 +163,8 @@ func (c *ChatHandler) sendMessageToClient(clientID string, msg *domain.KafkaMess
 	if !ok {
 		return nil
 	}
-	message := chat_server.Message{
+	message := chat_server.ResponseMessage{
+		From:      msg.FromUsername,
 		To:        msg.ToUsername,
 		Content:   msg.Content,
 		CreatedAt: msg.CreatedAt,
@@ -128,9 +177,19 @@ func (c *ChatHandler) sendMessageToClient(clientID string, msg *domain.KafkaMess
 	return nil
 }
 
-func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server.Message) (*empty.Empty, error) {
+// BroadcastMessage sends a chat message to all connected clients.
+// It iterates through the registered client streams and forwards the message to each client.
+//
+// Parameters:
+//   - ctx (context.Context): The context for the request, allowing cancellation and deadlines.
+//   - message (*chat_server.Message): The message to be broadcasted, including sender and content information.
+//
+// Returns:
+//   - *emptypb.Empty: An empty response indicating successful execution.
+//   - error: An error if broadcasting fails.
+func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server.RequestMessage) (*empty.Empty, error) {
 	toUsername := message.GetTo()
-	// Extract metadata from the context
+	// Extract metadata from the contextgot
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, fmt.Errorf("unable to retrieve metadata")
@@ -174,11 +233,12 @@ func (c *ChatHandler) BroadcastMessage(ctx context.Context, message *chat_server
 
 	// Create Kafka message
 	kafkaMessage := &domain.KafkaMessage{
-		FromId:     fromUser.Id,
-		ToId:       toUser.Id,
-		ToUsername: toUser.Username,
-		Content:    message.GetContent(),
-		CreatedAt:  timestamppb.New(time.Now()),
+		FromID:       fromUser.Id,
+		ToID:         toUser.Id,
+		FromUsername: fromUser.Username,
+		ToUsername:   toUser.Username,
+		Content:      message.GetContent(),
+		CreatedAt:    timestamppb.New(time.Now()),
 	}
 
 	// Publish Kafka message in a separate goroutine
@@ -203,6 +263,7 @@ func (c *ChatHandler) publishMessage(topic string, message *domain.KafkaMessage)
 	return err
 }
 
+// CreateUser for create user into database
 func (c *ChatHandler) CreateUser(ctx context.Context, request *chat_server.User) (*empty.Empty, error) {
 	user := &domain.User{
 		Name:     request.GetName(),

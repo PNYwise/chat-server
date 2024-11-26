@@ -13,14 +13,21 @@ message User {
   string username = 2;
 }
 
-message Message {
+message RequestMessage {
   string to = 1;
   string content = 2;
   google.protobuf.Timestamp createdAt = 3;
 }
 
+message ResponseMessage {
+  string from = 1;
+  string to = 2;
+  string content = 3;
+  google.protobuf.Timestamp createdAt = 4;
+}
+
 service Broadcast {
-  rpc CreateStream(google.protobuf.Empty) returns (stream Message);
-  rpc BroadcastMessage(Message) returns (google.protobuf.Empty);
+  rpc CreateStream(google.protobuf.Empty) returns (stream ResponseMessage);
+  rpc BroadcastMessage(RequestMessage) returns (google.protobuf.Empty);
   rpc CreateUser(User) returns (google.protobuf.Empty);
 }
