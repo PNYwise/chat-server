@@ -83,8 +83,8 @@ func main() {
 	server := grpc.NewServer()
 
 	// init repository
-	userRepo := repository.NewUserRepository(db, ctx)
-	messageRepo := repository.NewMessageRepository(db, ctx)
+	userRepo := repository.NewUserRepository(ctx, db)
+	messageRepo := repository.NewMessageRepository(ctx, db)
 
 	// init handler
 	chatHandler := handler.NewChatHandler(internalConfig, producer, partitionConsumer, userRepo, messageRepo)

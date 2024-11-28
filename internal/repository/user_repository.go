@@ -12,12 +12,22 @@ import (
 )
 
 type userRepository struct {
-	db  *pgxpool.Pool
 	ctx context.Context
+	db  *pgxpool.Pool
 }
 
-func NewUserRepository(db *pgxpool.Pool, ctx context.Context) domain.IUserRepository {
-	return &userRepository{db, ctx}
+// NewUserRepository creates a new instance of IUserRepository for managing user data.
+// It requires a context (ctx) for managing request-specific metadata such as timeouts
+// or cancellations and a database connection pool (db) for interacting with the database.
+//
+// Parameters:
+//   - ctx: Context for managing request lifecycle, including cancellations and timeouts.
+//   - db: A connection pool for PostgreSQL (pgxpool.Pool) to execute queries.
+//
+// Returns:
+//   - An implementation of the domain.IUserRepository interface.
+func NewUserRepository(ctx context.Context, db *pgxpool.Pool) domain.IUserRepository {
+	return &userRepository{ctx, db}
 }
 
 // Create implements IUserRepository.

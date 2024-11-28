@@ -17,7 +17,16 @@ type messageRepository struct {
 	ctx context.Context
 }
 
-func NewMessageRepository(db *pgxpool.Pool, ctx context.Context) domain.IMessageRepository {
+// NewMessageRepository creates a new instance of IMessageRepository for managing message data.
+// This function initializes the repository with the provided database connection pool and context.
+//
+// Parameters:
+//   - ctx: Context for managing the lifecycle of requests, including timeouts and cancellations.
+//   - db: A pgxpool.Pool object representing the PostgreSQL connection pool.
+//
+// Returns:
+//   - An implementation of the domain.IMessageRepository interface.
+func NewMessageRepository(ctx context.Context, db *pgxpool.Pool) domain.IMessageRepository {
 	return &messageRepository{db, ctx}
 }
 
@@ -55,7 +64,14 @@ func (m *messageRepository) Delete(ids []uint) error {
 	return nil
 }
 
-// ReadByUserId implements IMessageRepository.
+// ReadByUserId retrieves messages for a specific user by their ID.
+//
+// Parameters:
+//   - userID: The ID of the user whose messages should be retrieved.
+//
+// Returns:
+//   - A pointer to a slice of domain.Message, containing the user's messages.
+//   - An error if something goes wrong during the query.
 func (m *messageRepository) ReadByUserId(userID uint) (*[]domain.Message, error) {
 	query := `
 		SELECT 
@@ -70,7 +86,7 @@ func (m *messageRepository) ReadByUserId(userID uint) (*[]domain.Message, error)
 		LEFT JOIN users u_from on u_from.id = m.from_id
 		LEFT JOIN users u_to on u_to.id = m.to_id
 		WHERE m.to_id = $1`
-	rows, err := m.db.Query(m.ctx, query, userId)
+	rows, err := m.db.Query(m.ctx, query, userID)
 	if err != nil {
 		log.Printf("Error executing query: %v", err)
 		return nil, err
